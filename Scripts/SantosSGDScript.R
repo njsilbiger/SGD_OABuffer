@@ -75,68 +75,6 @@ SGDData <- read_csv(here("data","SGDData_times.csv"))
 SGDData <- SGDData %>%
   mutate_at(.vars = c("rn_bq_m3", "nox_u_m","aou_umol_l"  ,"excess_co2_umol_kg","temperature","p_h_in","advection_rate_cm_day", "water_level_m"), .funs = list(std = ~scale(.)))
 
-SGDData %>%
-  ggplot(aes(x = rn_bq_m3, y = nox_u_m, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = water_level_m, y = rn_bq_m3))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = nox_u_m, y = aou_umol_l, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = aou_umol_l, y = excess_co2_umol_kg, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-
-SGDData %>%
-  ggplot(aes(x = aou_umol_l, y = p_h_in, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = temperature, y = aou_umol_l, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = rn_bq_m3, y = temperature, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-
-SGDData %>%
-  ggplot(aes(x = temperature, y = nox_u_m, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = rn_bq_m3, y = excess_co2_umol_kg, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
-SGDData %>%
-  ggplot(aes(x = rn_bq_m3, y = p_h_in, color = DayNight))+
-  geom_point()+
-  geom_smooth(method = "lm")+
-  facet_wrap(~site, scales = "free")
-
 
 ### site level sums ####
 
@@ -169,7 +107,8 @@ P_onetree<-SGD_sum %>%
        )+
   theme_bw()
 
-P_no_onetree + P_onetree +plot_annotation(tag_levels = "A")
+P_no_onetree + P_onetree +plot_annotation(tag_levels = "A")+
+  ggsave(filename = "Output/cumulativeN_CO2.pdf", width = 8, height = 4)
 
 
 ### site level averages ####
