@@ -151,7 +151,7 @@ CO2mod<-bf(excess_co2_umol_kg_std ~DayNight*(rn_bq_m3_std+aou_umol_l_std))
 RunSEM<-function(site){
   
 
-fit_brms <- brm(SGDmod+
+fit_brms <- brm(#SGDmod+
                     Nmod+
                     Tempmod+ 
                     pHmod+
@@ -163,9 +163,9 @@ fit_brms <- brm(SGDmod+
 # calculate LOO (leave one out) diagnostics
 SGD_loo<-loo(fit_brms, reloo = TRUE) # looks good!
 
-p1<-pp_check(fit_brms, resp="rnbqm3std") +
-  scale_color_manual(values=c("red", "black"))+
-  ggtitle("Radon")
+# p1<-pp_check(fit_brms, resp="rnbqm3std") +
+#   scale_color_manual(values=c("red", "black"))+
+#   ggtitle("Radon")
 p2<-pp_check(fit_brms, resp="noxumstd") +
   scale_color_manual(values=c("red", "black"))+
   ggtitle("N+N")
@@ -182,7 +182,8 @@ p6<-pp_check(fit_brms, resp="excessco2umolkgstd") +
   scale_color_manual(values=c("red", "black"))+
   ggtitle("Excess CO2")
 
-p1+p2+p3+p4+p5+p6+plot_layout(guides = "collect") +
+#p1+
+  p2+p3+p4+p5+p6+plot_layout(guides = "collect") +
   plot_annotation(title = 'Heron Island Posterior Predictive Checks', tag_levels = "A")+
   ggsave(here("Output",paste(site,"Posteriorchecks.pdf")), width = 5, height = 5)
 
@@ -190,24 +191,24 @@ p1+p2+p3+p4+p5+p6+plot_layout(guides = "collect") +
 # Model 1
 # SGD ~ depth
 
-R<-conditional_effects(fit_brms, "water_level_m_std", resp = "rnbqm3std", method = "predict", resolution = 1000)
-R1<-R$rnbqm3std.rnbqm3std_water_level_m_std %>% # back transform the scaled effects for the plot
-  mutate(estimate = estimate__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center"),
-         lower = lower__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center"),
-         upper = upper__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")) %>%
-  mutate(WaterLevel = water_level_m_std*attr (SGDData$water_level_m_std,"scaled:scale")+attr(SGDData$water_level_m_std,"scaled:center")
-  )%>%
-  ggplot()+ # back trasform the log transformed data for better visual
-  geom_line(aes(x = WaterLevel, y = estimate), lwd = 1, color = 'grey')+
-  geom_ribbon(aes(x = WaterLevel,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3, fill = "grey")+
-  geom_point(data = SGDData[SGDData$site==site,], aes(x = water_level_m, y = rn_bq_m3, color = DayNight)) +
-  xlab("Water level (m)")+
-  ylab(expression(atop("Radon", paste("(bq m"^3,")"))))+
-  ggtitle("Model 1")+
- # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
-#  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
-  theme_minimal()+
-  theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
+# R<-conditional_effects(fit_brms, "water_level_m_std", resp = "rnbqm3std", method = "predict", resolution = 1000)
+# R1<-R$rnbqm3std.rnbqm3std_water_level_m_std %>% # back transform the scaled effects for the plot
+#   mutate(estimate = estimate__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center"),
+#          lower = lower__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center"),
+#          upper = upper__*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")) %>%
+#   mutate(WaterLevel = water_level_m_std*attr (SGDData$water_level_m_std,"scaled:scale")+attr(SGDData$water_level_m_std,"scaled:center")
+#   )%>%
+#   ggplot()+ # back trasform the log transformed data for better visual
+#   geom_line(aes(x = WaterLevel, y = estimate), lwd = 1, color = 'grey')+
+#   geom_ribbon(aes(x = WaterLevel,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3, fill = "grey")+
+#   geom_point(data = SGDData[SGDData$site==site,], aes(x = water_level_m, y = rn_bq_m3, color = DayNight)) +
+#   xlab("Water level (m)")+
+#   ylab(expression(atop("Radon", paste("(bq m"^3,")"))))+
+#   ggtitle("Model 1")+
+#  # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
+# #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
+#   theme_minimal()+
+#   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
 
 ## Model 2
 # N ~ SGD*DayNight
@@ -383,7 +384,7 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "excessco2umolk
     theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
   
   ## bring them all together in patchwork
-  R<-(R1|R2|R3)/(R4|R4b)/(R5|R5b)/(R6|R6b)+plot_layout(guides = "collect")+
+  R<-(R2|R3)/(R4|R4b)/(R5|R5b)/(R6|R6b)+plot_layout(guides = "collect")+
     plot_annotation(tag_levels = "A")&
     theme(axis.title.x = element_text(size = 14),
           axis.title.y = element_text(size = 14),
@@ -404,3 +405,108 @@ LI_fit<-RunSEM(site ="Lizard Island")
 OTI_fit<-RunSEM(site ="One Tree")
 LHI_fit<-RunSEM(site ="Lord Howe Island")
 NP_fit<-RunSEM(site ="Nusa Penida")
+
+## Extract the posteriors
+
+## get the posterior
+get_post<-function(site, fit){
+
+post <- posterior_samples(fit)
+
+Cof<-post %>% 
+  select(starts_with("b"),-ends_with("Intercept")) %>%
+  gather() %>% 
+  group_by(key)%>%
+  median_hdci()%>%
+  mutate(sig = ifelse(sign(.lower)==sign(.upper),'yes','no'))%>%# if not significant make it grey
+  separate(col = key,into = c("b", "dependent", "independent"),sep = "_")%>% #loose the b and bring the values back together
+  # mutate(key = paste(dependent, independent))%>%
+  mutate(dependent = factor(dependent, levels = c("aouumollstd","excessco2umolkgstd","noxumstd","phinstd","temperaturestd")))%>%
+  mutate(dependent  = recode(dependent, aouumollstd = "AOU", excessco2umolkgstd = "Excess CO2", noxumstd = "NOx", phinstd = "pH", temperaturestd  ="Temperature"), Site = site)
+
+return(Cof)
+}
+
+HICoF<-get_post(site = "Heron Island", fit = HI_fit)
+CICoF<-get_post(site = "Cook Islands", fit = CI_fit)
+LICoF<-get_post(site = "Lizzard Island", fit = LI_fit)
+OTICoF<-get_post(site = "One Tree", fit = OTI_fit)
+LHICoF<-get_post(site = "Lord Howe Island", fit = LHI_fit)
+NPCoF<-get_post(site = "Nusa Penida", fit = NP_fit)
+
+
+AllCoefs<- HICoF %>%
+  bind_rows(CICoF)%>%
+  bind_rows(LICoF)%>%
+  bind_rows(OTICoF)%>%
+  bind_rows(LHICoF)%>%
+  bind_rows(NPCoF)
+
+#Make the plot
+CoefPlot<-AllCoefs%>%
+  # ggplot(aes(x = value, y = reorder(independent, value), shape = sig, color = Site)) +  # note how we used `reorder()` to arrange the coefficients
+  ggplot(aes(x = value, y = independent, shape = sig, color = Site)) +  # note 
+  geom_vline(xintercept = 0, alpha = 1/10, color = 'firebrick4') +
+  geom_point(size = 2)+
+  geom_errorbarh(aes(xmin = .lower, xmax = .upper), height = 0)+
+  #scale_alpha_manual(values = c(0.2,1))+
+  scale_shape_manual(values = c(1,16))+
+  scale_color_brewer(palette = "Set2")+
+#  scale_color_manual(values = c("firebrick4", "orange"), name = " ")+
+  
+  labs(#title = "Black Point",
+    x = NULL, y = NULL) +
+  theme_bw() +
+  guides(shape = FALSE)+
+  theme(legend.title = element_blank(),
+    panel.grid = element_blank(),
+        panel.grid.major.y = element_line(color = alpha("firebrick4", 1/4), linetype = 3),
+        axis.text.y  = element_text(hjust = 0),
+        axis.ticks.y = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=14),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 14, face = "bold")
+  )+
+  facet_grid(~dependent, scales = "free_y", space='free')+
+  ggplot2::ggsave("Output/coefficientsAll.pdf", width = 10, height = 5, useDingbats = FALSE)
+
+
+IndivPlots<-function(site){
+  AllCoefs%>%
+    filter(Site == site) %>%
+    ggplot(aes(x = value, y = independent, shape = sig)) +  # note how we used `reorder()` to arrange the coefficients
+    geom_vline(xintercept = 0, alpha = 1/10, color = 'firebrick4') +
+    geom_point(size = 2)+
+    geom_errorbarh(aes(xmin = .lower, xmax = .upper), height = 0)+
+    #scale_alpha_manual(values = c(0.2,1))+
+    scale_shape_manual(values = c(1,16))+
+    #scale_color_brewer(palette = "Set2")+
+      scale_color_manual(values = c("firebrick4"), name = " ")+
+    
+    labs(title = site,
+      x = NULL, y = NULL) +
+    theme_bw() +
+    guides(shape = FALSE)+
+    theme(legend.title = element_blank(),
+          panel.grid = element_blank(),
+          panel.grid.major.y = element_line(color = alpha("firebrick4", 1/4), linetype = 3),
+          axis.text.y  = element_text(hjust = 0),
+          axis.ticks.y = element_blank(),
+          legend.position = "bottom",
+          legend.text=element_text(size=14),
+          strip.background = element_blank(),
+          strip.text = element_text(size = 14, face = "bold")
+    )+
+    facet_grid(~dependent, scales = "free_y", space='free')
+}
+
+HIplot<-IndivPlots(site = "Heron Island")
+CIplot<-IndivPlots(site = "Cook Islands")
+LIplot<-IndivPlots(site = "Lizzard Island")
+OTIplot<-IndivPlots(site = "One Tree")
+LHIplot<-IndivPlots(site = "Lord Howe Island")
+NPplot<-IndivPlots(site = "Nusa Penida")
+
+HIplot/CIplot/LIplot/OTIplot/LHIplot/NPplot+
+  ggsave("Output/CoefIndiv.pdf", width = 8, height = 20)
