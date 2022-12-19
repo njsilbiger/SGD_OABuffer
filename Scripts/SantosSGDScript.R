@@ -84,6 +84,11 @@ SGD_sum<- SGDData %>%
   group_by(site) %>%
   summarise_if(is.numeric, sum) 
 
+SGD_mean<- SGDData %>%
+  select(site, advection_rate_cm_day, din, nox_u_m, excess_co2_umol_kg, p_co_in_uatm)%>%
+  group_by(site) %>%
+  summarise_if(is.numeric, mean) 
+
 P_no_onetree<-SGD_sum %>%
   filter(site != "One Tree") %>% # one tree is crazy
   ggplot(aes(x = din, y = excess_co2_umol_kg))+
@@ -94,6 +99,26 @@ P_no_onetree<-SGD_sum %>%
   labs(x = expression(paste("Cumulative DIN ",mu, "mol L"^-1 )),
        y = expression(paste("Cumulative Excess CO"[2]," ", mu, "mol kg"^-1 )))+
   theme_bw()
+
+
+P_no_onetree<-SGD_mean %>%
+  filter(site != "One Tree") %>% # one tree is crazy
+  ggplot(aes(x = din, y = excess_co2_umol_kg))+
+  geom_point(size = 2)+
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  geom_label_repel(aes(label = site))+
+  scale_y_continuous(limits = c(-5, 35))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2)+
+  labs(x = expression(paste("Mean DIN ",mu, "mol L"^-1 )),
+      # y = expression(paste("Mean pCO"[2]," ", mu, "atm")),
+       y = expression(paste("Mean Excess CO"[2]," ", mu, "mol kg"^-1)))+
+  theme_bw()
+
+
+mod1<-lm(p_co_in_uatm ~ excess_co2_umol_kg, data = SGD_mean %>%
+           filter(site != "One Tree"))
+
+anova(mod1)
 
 
 P_onetree<-SGD_sum %>%
@@ -108,8 +133,21 @@ P_onetree<-SGD_sum %>%
        )+
   theme_bw()
 
-P_no_onetree + P_onetree +plot_annotation(tag_levels = "A")+
-  ggsave(filename = "Output/cumulativeN_CO2.pdf", width = 8, height = 4)
+P_onetree<-SGD_mean %>%
+  ggplot(aes(x = din, y =excess_co2_umol_kg))+
+  geom_point(size = 2)+
+  scale_y_continuous(limits = c(-5, 35))+
+  # geom_smooth(method = "lm", se = FALSE, color = "black") +
+  geom_label_repel(aes(label = site))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2)+
+  labs(x = expression(paste("Cumulative DIN ",mu, "mol L"^-1 )),
+       y = ""
+       #y = expression(paste("Cumulative Excess CO"[2]," ", mu, "mol kg"^-1)) 
+  )+
+  theme_bw()
+
+P_no_onetree + P_onetree +plot_annotation(tag_levels = "A")
+  ggsave(filename = "Output/MeanN_CO2.pdf", width = 8, height = 4)
 
 
 ### site level averages ####
@@ -120,13 +158,13 @@ SGD_mean<- SGDData %>%
 
 SGD_mean %>%
   filter(site != "One Tree") %>% 
-  ggplot(aes(x = din, y = p_h_in))+
+  ggplot(aes(x = din, y = p_co_in_uatm))+
   geom_point(size = 2)+
    geom_smooth(method = "lm", se = FALSE, color = "black") +
   geom_label_repel(aes(label = site))+
  # geom_hline(yintercept = 0, color = "grey", linetype = 2)+
-  labs(x = "Mean DIN umol/L",
-       y = "Mean pH")+
+  labs(x = expression(paste("Mean DIN ",mu, "mol L"^-1 )),
+        y = expression(paste("Mean pCO"[2]," ", mu, "atm")))+
   theme_bw()
 
 ### Bayes SEM analysis ###
@@ -139,6 +177,7 @@ Tempmod<-bf(temperature_std ~ DayNight*rn_bq_m3_std)
 # pH ~ DayNight*(AOU + SGD)
 #pHmod<-bf(p_h_in_std~DayNight*(aou_umol_l_std+rn_bq_m3_std))
 pHmod<-bf(p_h_in_std~aou_umol_l_std+rn_bq_m3_std)
+pCO2mod<-bf(p_co_in_uatm~aou_umol_l_std+rn_bq_m3_std)
 
 # AOU ~ DayNight*(N+Temperature)
 #AOUmod<-bf(aou_umol_l_std~DayNight*(temperature_std+nox_u_m_std))
@@ -153,7 +192,7 @@ CO2mod<-bf(excess_co2_umol_kg_std ~rn_bq_m3_std+aou_umol_l_std)
 ## Later
 # Delta TA ~ pH + temp
 
-
+site <-unique(SGDData$site)
 
 # Function to run Bayesian SEM and make the posterior predictive checks and plot marginal effects
 RunSEM<-function(site){
@@ -162,9 +201,9 @@ RunSEM<-function(site){
 fit_brms <- brm(#SGDmod+
                     Nmod+
                     Tempmod+ 
-                    pHmod+
+                    #pHmod+
                     AOUmod +
-                    CO2mod+
+                    pCO2mod+
                     set_rescor(FALSE),
                   data=SGDData[SGDData$site == site,]
                   ,cores=4, chains = 3)
@@ -180,18 +219,24 @@ p2<-pp_check(fit_brms, resp="noxumstd") +
 p3<-pp_check(fit_brms, resp="temperaturestd") +
   scale_color_manual(values=c("red", "black"))+
   ggtitle("Temperature")
-p4<-pp_check(fit_brms, resp="phinstd") +
+# p4<-pp_check(fit_brms, resp="phinstd") +
+#   scale_color_manual(values=c("red", "black"))+
+#   ggtitle("pH")
+p4<-pp_check(fit_brms, resp="pcoinuatmstd") +
   scale_color_manual(values=c("red", "black"))+
-  ggtitle("pH")
+  ggtitle("pCO2")
+
 p5<-pp_check(fit_brms, resp="aouumollstd") +
   scale_color_manual(values=c("red", "black"))+
   ggtitle("AOU")
-p6<-pp_check(fit_brms, resp="excessco2umolkgstd") +
-  scale_color_manual(values=c("red", "black"))+
-  ggtitle("Excess CO2")
+# p6<-pp_check(fit_brms, resp="excessco2umolkgstd") +
+#   scale_color_manual(values=c("red", "black"))+
+#   ggtitle("Excess CO2")
 
 #p1+
-  p2+p3+p4+p5+p6+plot_layout(guides = "collect") +
+  p2+p3+p4+p5+
+    #p6+
+    plot_layout(guides = "collect") +
   plot_annotation(title = 'Heron Island Posterior Predictive Checks', tag_levels = "A")+
   ggsave(here("Output",paste(site,"Posteriorchecks.pdf")), width = 5, height = 5)
 
@@ -284,25 +329,45 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
   # 
   # Model 4a
   # pH ~ DayNight*(AOU + SGD)
-  R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "phinstd", method = "predict", resolution = 1000)
-  R4<-R$phinstd.phinstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
-           lower = lower__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
-           upper = upper__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center")) %>%
+  # R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "phinstd", method = "predict", resolution = 1000)
+  # R4<-R$phinstd.phinstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
+  #   mutate(estimate = estimate__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
+  #          lower = lower__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
+  #          upper = upper__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center")) %>%
+  #   mutate(radon = rn_bq_m3_std*attr (SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")
+  #   )%>%
+  #   ggplot()+ # back trasform the log transformed data for better visual
+  #   geom_line(aes(x = radon, y = estimate), lwd = 1)+
+  #   geom_ribbon(aes(x = radon,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
+  #   geom_point(data = SGDData[SGDData$site==site,], aes(x = rn_bq_m3, y = p_h_in)) +
+  #   ylab("pH")+
+  #   xlab(expression(atop("Radon", paste("(bq m"^3,")"))))+
+  #   ggtitle("Model 4")+
+  #   # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
+  #   #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
+  #   theme_minimal()+
+  #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
+  
+  # Model 4a
+  # pCO2 ~ DayNight*(AOU + SGD)
+  R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "pcoinuatmstd", method = "predict", resolution = 1000)
+  R4<-R$pcoinuatmstd.pcoinuatmstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
+    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
+           lower = lower__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
+           upper = upper__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center")) %>%
     mutate(radon = rn_bq_m3_std*attr (SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")
     )%>%
     ggplot()+ # back trasform the log transformed data for better visual
     geom_line(aes(x = radon, y = estimate), lwd = 1)+
     geom_ribbon(aes(x = radon,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
-    geom_point(data = SGDData[SGDData$site==site,], aes(x = rn_bq_m3, y = p_h_in)) +
-    ylab("pH")+
+    geom_point(data = SGDData[SGDData$site==site,], aes(x = rn_bq_m3, y = p_co_in_uatm)) +
+    ylab(expression(paste("pCO"[2]," ", mu, "atm")))+
     xlab(expression(atop("Radon", paste("(bq m"^3,")"))))+
     ggtitle("Model 4")+
     # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
     #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
     theme_minimal()+
     theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
-  
   
   # Model 4b
   # pH ~ DayNight*(AOU + SGD)
@@ -326,18 +391,37 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
   #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
 
   # pH ~ DayNight*(AOU + SGD)
-  R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "phinstd", method = "predict", resolution = 1000)
-  R4b<-R$phinstd.phinstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
-           lower = lower__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
-           upper = upper__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center")) %>%
+  # R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "phinstd", method = "predict", resolution = 1000)
+  # R4b<-R$phinstd.phinstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
+  #   mutate(estimate = estimate__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
+  #          lower = lower__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center"),
+  #          upper = upper__*attr(SGDData$p_h_in_std,"scaled:scale")+attr(SGDData$p_h_in_std,"scaled:center")) %>%
+  #   mutate(aou = aou_umol_l_std*attr (SGDData$aou_umol_l_std,"scaled:scale")+attr(SGDData$aou_umol_l_std,"scaled:center")
+  #   )%>%
+  #   ggplot()+ # back trasform the log transformed data for better visual
+  #   geom_line(aes(x = aou, y = estimate), lwd = 1)+
+  #   geom_ribbon(aes(x = aou,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
+  #   geom_point(data = SGDData[SGDData$site==site,], aes(x = aou_umol_l, y = p_h_in)) +
+  #   ylab("pH")+
+  #   xlab(expression(atop("AOU", paste("(",mu, "mol L"^-1,")"))))+
+  #   ggtitle("Model 4")+
+  #   # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
+  #   #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
+  #   theme_minimal()+
+  #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
+
+  R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "pcoinuatmstd", method = "predict", resolution = 1000)
+  R4b<-R$pcoinuatmstd.pcoinuatmstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
+    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
+           lower = lower__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
+           upper = upper__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center")) %>%
     mutate(aou = aou_umol_l_std*attr (SGDData$aou_umol_l_std,"scaled:scale")+attr(SGDData$aou_umol_l_std,"scaled:center")
     )%>%
     ggplot()+ # back trasform the log transformed data for better visual
     geom_line(aes(x = aou, y = estimate), lwd = 1)+
     geom_ribbon(aes(x = aou,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
-    geom_point(data = SGDData[SGDData$site==site,], aes(x = aou_umol_l, y = p_h_in)) +
-    ylab("pH")+
+    geom_point(data = SGDData[SGDData$site==site,], aes(x = aou_umol_l, y = p_co_in_uatm)) +
+    ylab(expression(paste("pCO"[2]," ", mu, "atm")))+
     xlab(expression(atop("AOU", paste("(",mu, "mol L"^-1,")"))))+
     ggtitle("Model 4")+
     # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
@@ -430,24 +514,24 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
 #     theme_minimal()+
 #     theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
 
-  R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "excessco2umolkgstd", method = "predict", resolution = 1000)
-  R6<-R$excessco2umolkgstd.excessco2umolkgstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
-           lower = lower__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
-           upper = upper__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center")) %>%
-    mutate(radon = rn_bq_m3_std*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")
-    )%>%
-    ggplot()+ # back trasform the log transformed data for better visual
-    geom_line(aes(x = radon, y = estimate), lwd = 1)+
-    geom_ribbon(aes(x = radon,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
-    geom_point(data = SGDData[SGDData$site==site,], aes(x = rn_bq_m3, y = excess_co2_umol_kg)) +
-    xlab(expression(atop("Radon", paste("(bq m"^3,")"))))+
-    ylab(expression(atop("Excess CO"[2], paste("(",mu, "mol kg"^-1,")"))))+
-    ggtitle("Model 6")+
-    # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
-    #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
-    theme_minimal()+
-    theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
+  # R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "excessco2umolkgstd", method = "predict", resolution = 1000)
+  # R6<-R$excessco2umolkgstd.excessco2umolkgstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
+  #   mutate(estimate = estimate__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
+  #          lower = lower__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
+  #          upper = upper__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center")) %>%
+  #   mutate(radon = rn_bq_m3_std*attr(SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")
+  #   )%>%
+  #   ggplot()+ # back trasform the log transformed data for better visual
+  #   geom_line(aes(x = radon, y = estimate), lwd = 1)+
+  #   geom_ribbon(aes(x = radon,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
+  #   geom_point(data = SGDData[SGDData$site==site,], aes(x = rn_bq_m3, y = excess_co2_umol_kg)) +
+  #   xlab(expression(atop("Radon", paste("(bq m"^3,")"))))+
+  #   ylab(expression(atop("Excess CO"[2], paste("(",mu, "mol kg"^-1,")"))))+
+  #   ggtitle("Model 6")+
+  #   # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
+  #   #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
+  #   theme_minimal()+
+  #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
   
   # Model 6b
   # excess CO2 ~ DayNight*(SGD +AOU)
@@ -471,27 +555,29 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
   #   theme_minimal()+
   #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
   # 
-  R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "excessco2umolkgstd", method = "predict", resolution = 1000)
-  R6b<-R$excessco2umolkgstd.excessco2umolkgstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
-           lower = lower__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
-           upper = upper__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center")) %>%
-    mutate(aou = aou_umol_l_std*attr(SGDData$aou_umol_l_std,"scaled:scale")+attr(SGDData$aou_umol_l_std,"scaled:center")
-    )%>%
-    ggplot()+ # back trasform the log transformed data for better visual
-    geom_line(aes(x = aou, y = estimate), lwd = 1)+
-    geom_ribbon(aes(x = aou,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
-    geom_point(data = SGDData[SGDData$site==site,], aes(x = aou_umol_l, y = excess_co2_umol_kg)) +
-    xlab(expression(atop("AOU", paste("(",mu, "mol L"^-1,")"))))+
-    ylab(expression(atop("Excess CO"[2], paste("(",mu, "mol kg"^-1,")"))))+
-    ggtitle("Model 6")+
-    # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
-    #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
-    theme_minimal()+
-    theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
+  # R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "excessco2umolkgstd", method = "predict", resolution = 1000)
+  # R6b<-R$excessco2umolkgstd.excessco2umolkgstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
+  #   mutate(estimate = estimate__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
+  #          lower = lower__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center"),
+  #          upper = upper__*attr(SGDData$excess_co2_umol_kg_std,"scaled:scale")+attr(SGDData$excess_co2_umol_kg_std,"scaled:center")) %>%
+  #   mutate(aou = aou_umol_l_std*attr(SGDData$aou_umol_l_std,"scaled:scale")+attr(SGDData$aou_umol_l_std,"scaled:center")
+  #   )%>%
+  #   ggplot()+ # back trasform the log transformed data for better visual
+  #   geom_line(aes(x = aou, y = estimate), lwd = 1)+
+  #   geom_ribbon(aes(x = aou,ymin=lower, ymax=upper), linetype=1.5, alpha=0.3)+
+  #   geom_point(data = SGDData[SGDData$site==site,], aes(x = aou_umol_l, y = excess_co2_umol_kg)) +
+  #   xlab(expression(atop("AOU", paste("(",mu, "mol L"^-1,")"))))+
+  #   ylab(expression(atop("Excess CO"[2], paste("(",mu, "mol kg"^-1,")"))))+
+  #   ggtitle("Model 6")+
+  #   # scale_x_continuous(breaks = c(0.2,1,5,10,25))+
+  #   #  scale_y_continuous(breaks = c(0,0.1,1,5,10,30))+
+  #   theme_minimal()+
+  #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
   
   ## bring them all together in patchwork
-  R<-(R2|R3)/(R4|R4b)/(R5|R5b)/(R6|R6b)+plot_layout(guides = "collect")+
+  R<-(R2|R3)/(R4|R4b)/(R5|R5b)
+  #/(R6|R6b)+
+    plot_layout(guides = "collect")+
     plot_annotation(tag_levels = "A")&
     theme(axis.title.x = element_text(size = 14),
           axis.title.y = element_text(size = 14),
