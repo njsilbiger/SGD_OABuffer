@@ -78,7 +78,7 @@ SGDData <- read_csv(here("data","Time_Space.csv"))
 # standardize the data
 SGDData <- SGDData %>%
  # mutate_at(.vars = c("rn_bq_m3", "nox_u_m", "salinity"), .funs = list(log = ~log(.))) %>%
-  mutate_at(.vars = c("rn_bq_m3", "nox_u_m","aou_umol_l"  ,"excess_co2_umol_kg","temperature","p_h_in","advection_rate_cm_day", "water_level_m", "p_co_in_uatm", "salinity"), .funs = list(std = ~scale(.)))
+  mutate_at(.vars = c("rn_bq_m3", "nox_u_m","aou_umol_l"  ,"excess_co2_umol_kg","temperature","p_h_in","advection_rate_cm_day", "water_level_m", "p_co_in_uatm", "salinity", "co_sst"), .funs = list(std = ~scale(.)))
   #rename( "rn_bq_m3_std" ="rn_bq_m3_log_std" ,"nox_u_m_std" ="nox_u_m_log_std", "Salinty_std"="salinity_log_std")
 
 
@@ -733,58 +733,112 @@ HIplot/CIplot/LIplot/OTIplot/LHIplot/NPplot
     geom_smooth(method = "lm")
   
   
- N_sum<- SGDData_ts %>% 
+ N_sum<- SGDData_ts%>% 
     group_by(site)%>%
     summarise(maxN = max(nox_u_m, na.rm = TRUE),
               meanN = mean(nox_u_m, na.rm = TRUE),
               covN = var(nox_u_m, na.rm = TRUE)/mean(nox_u_m, na.rm = TRUE))
     
 dat2<-  SGDData_ts %>% 
+  #  mutate(co_sst_std_log = scale(log(co_sst)))%>%
     group_by(site) %>% 
     nest() %>% 
-    mutate(model = map(data, ~lm(p_co_in_uatm_std ~ aou_umol_l_std, data = .x) %>% 
+    mutate(model = map(data, ~lm(p_h_in_std ~ aou_umol_l_std, data = .x) %>% 
                          tidy)) %>% 
     unnest(model) %>%
     filter(term == 'aou_umol_l_std') %>%
-    select(site, estimate) %>%
+    select(site, estimate_aou = estimate, std.error_aou = std.error,p.value) %>% 
+    mutate(sig = ifelse(p.value <= 0.05, "yes","no")) %>%
     left_join(N_sum) 
 
-
-ggplot(dat2, aes(x = maxN, y = estimate))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "black")+
-  geom_label_repel(aes(label = site))+
+p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
+  geom_point(size = 3, aes(color = sig))+
+  geom_errorbar(aes(ymin = estimate_aou-std.error_aou, ymax = estimate_aou+std.error_aou), width = 0.1)+
+  geom_smooth(method = "lm", formula = y~poly(x,2),se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site),nudge_x = 0.1)+
+  # annotate(geom = "text", x = 2.7, y = 0.01, label = expression("net productivity did not effect pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y =- 0.2, label = expression("net productivity decreased pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = 0.2, label = expression("net productivity increased pCO"[2]), size = 3, color = "blue")+
+  scale_color_manual(values = c("grey","black"))+
   geom_hline(yintercept = 0, color = "grey", linetype = 2) +
-  labs(y = "Effect of productivity on pCo2",
-       x = "Max NOx")+
-  theme_bw()
+  labs(y = expression("Standardized effect of productivity on pH"),
+       x = expression(paste("Max Nitrate + Nitrite", " (",mu, "mol L"^-1,")"))
+       )+
+  theme_bw()+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
 
 
-anova(lm(estimate~maxN, data = dat2))
+anova(lm(estimate_aou~maxN, data = dat2))
 
 
 dat3<-  SGDData_ts %>% 
+  #drop_na(co_sst_std) %>%
+ # mutate(co_sst_std_log = scale(log(co_sst)))%>%
   group_by(site) %>% 
   nest() %>% 
-  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ salinity_std, data = .x) %>% 
+  mutate(model = map(data, ~lm(p_h_in_std ~ rn_bq_m3_std, data = .x) %>% 
                        tidy)) %>% 
   unnest(model) %>%
-  filter(term == 'salinity_std') %>%
-  select(site, estimate) %>%
-  left_join(N_sum) 
+  filter(term == 'rn_bq_m3_std') %>%
+  select(site, estimate_sal = estimate, std.error_sal = std.error,p.value) %>% 
+  mutate(sig = ifelse(p.value <= 0.05, "yes","no")) %>%
+  left_join(N_sum)
+  
 
-ggplot(dat3, aes(x = maxN, y = estimate))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "black")+
-  geom_label_repel(aes(label = site))+
+p2<-ggplot(dat3, aes(x = maxN, y = estimate_sal))+
+  geom_point(size = 3, aes(color = sig))+
+  geom_errorbar(aes(ymin = estimate_sal-std.error_sal, ymax = estimate_sal+std.error_sal), width = 0.1)+
+#  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site), nudge_x = 0.1)+
+  scale_color_manual(values = c("grey","black"))+
   geom_hline(yintercept = 0, color = "grey", linetype = 2) +
-  labs(y = "Effect of salinity on pCo2",
-       x = "Max NOx")+
-  theme_bw()
+  labs(y = expression("Standardized effect of SGD on pH"),
+       x = expression(paste("Max Nitrate + Nitrite", " (",mu, "mol L"^-1,")"))
+  )+
+  # annotate(geom = "text", x = 2.7, y = 0.1, label = expression("SGD did not effect pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = 1.5, label = expression("SGD decreased pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = -1.5, label = expression("SGD increased pCO"[2]), size = 3, color = "blue")+
+  
+  theme_bw()+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
 
 
+p1+p2+plot_annotation(tag_levels = "A")&theme(panel.grid = element_line(color = "white"))
 
+ggsave(here("Output","maxN_effects.pdf"), width = 12, height = 5)
 
+p_aou<-SGDData_ts %>%
+  ggplot(aes(x = aou_umol_l, y = p_h_in))+
+  geom_point()+
+  geom_smooth(method = "lm",data = subset(SGDData_ts, site %in% c("Lord Howe Island","Heron Island","Nusa Penida","Cook Islands")))+
+  facet_wrap(~site, scales = "free", ncol = 1)+
+  theme_bw()+
+  labs(x = expression(atop("Biological Productivity", paste("AOU (",mu, "mol L"^-1,")"))),
+       y = "pH")+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
+ggsave(here("Output","AOU_pH.pdf"), width = 8, height = 6)
+
+p_radon<-SGDData_ts %>%
+  ggplot(aes(x = rn_bq_m3, y = p_h_in))+
+  geom_point()+
+  geom_smooth(method = "lm", data = subset(SGDData_ts, site =="Nusa Penida"))+
+  facet_wrap(~site, scales = "free", ncol = 1)+
+  theme_bw()+
+  labs(x = expression(paste("Radon", "(bq m"^3,")")),
+       y = " ")+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
+
+p_aou +p_radon
+
+ggsave(here("Output","Radon_aou_pH.pdf"), width = 8, height = 16)
 
 ### transect
 N_sum<- SGDData_transect %>% 
@@ -796,45 +850,64 @@ N_sum<- SGDData_transect %>%
 dat2<-  SGDData_transect %>% 
   group_by(site) %>% 
   nest() %>% 
-  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ aou_umol_l_std, data = .x) %>% 
+  mutate(model = map(data, ~lm(p_h_in_std ~ aou_umol_l_std, data = .x) %>% 
                        tidy)) %>% 
   unnest(model) %>%
   filter(term == 'aou_umol_l_std') %>%
-  select(site, estimate) %>%
-  left_join(N_sum) 
+  select(site, estimate_aou = estimate, std.error_aou = std.error,p.value) %>% 
+  mutate(sig = ifelse(p.value <= 0.05, "yes","no")) %>%
+  left_join(N_sum)
 
 
-ggplot(dat2, aes(x = maxN, y = estimate))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "black")+
-  geom_label_repel(aes(label = site))+
+p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
+  geom_point(size = 3, aes(color = sig))+
+  geom_errorbar(aes(ymin = estimate_aou-std.error_aou, ymax = estimate_aou+std.error_aou), width = 0.1)+
+  geom_smooth(method = "lm", formula = y~poly(x,2),se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site),nudge_x = 0.1)+
+  # annotate(geom = "text", x = 2.7, y = 0.01, label = expression("net productivity did not effect pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y =- 0.2, label = expression("net productivity decreased pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = 0.2, label = expression("net productivity increased pCO"[2]), size = 3, color = "blue")+
+  scale_color_manual(values = c("grey","black"))+
   geom_hline(yintercept = 0, color = "grey", linetype = 2) +
-  labs(y = "Effect of productivity on pCo2",
-       x = "Max NOx")+
-  theme_bw()
+  labs(y = expression("Standardized effect of productivity on pH"),
+       x = expression(paste("Max Nitrate + Nitrite", " (",mu, "mol L"^-1,")"))
+  )+
+  theme_bw()+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
 
-
-anova(lm(estimate~maxN, data = dat2))
-
-
+ggsave(here("Output","maxNeffects_transect.pdf"), width = 6, height = 5)
 
 dat3<-  SGDData_transect %>% 
+  #drop_na(co_sst_std) %>%
+  # mutate(co_sst_std_log = scale(log(co_sst)))%>%
   group_by(site) %>% 
   nest() %>% 
-  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ salinity_std, data = .x) %>% 
+  mutate(model = map(data, ~lm(p_h_in_std ~ rn_bq_m3_std, data = .x) %>% 
                        tidy)) %>% 
   unnest(model) %>%
-  filter(term == 'salinity_std') %>%
-  select(site, estimate) %>%
-  left_join(N_sum) 
+  filter(term == 'rn_bq_m3_std') %>%
+  select(site, estimate_sal = estimate, std.error_sal = std.error,p.value) %>% 
+  mutate(sig = ifelse(p.value <= 0.05, "yes","no")) %>%
+  left_join(N_sum)
 
-ggplot(dat3, aes(x = maxN, y = estimate))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "black")+
-  geom_label_repel(aes(label = site))+
+
+p2<-ggplot(dat3, aes(x = maxN, y = estimate_sal))+
+  geom_point(size = 3, aes(color = sig))+
+  geom_errorbar(aes(ymin = estimate_sal-std.error_sal, ymax = estimate_sal+std.error_sal), width = 0.1)+
+  #  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site), nudge_x = 0.1)+
+  scale_color_manual(values = c("grey","black"))+
   geom_hline(yintercept = 0, color = "grey", linetype = 2) +
-  labs(y = "Effect of salinity on pCo2",
-       x = "Max NOx")+
-  theme_bw()
-
-      
+  labs(y = expression("Standardized effect of SGD on pH"),
+       x = expression(paste("Max Nitrate + Nitrite", " (",mu, "mol L"^-1,")"))
+  )+
+  # annotate(geom = "text", x = 2.7, y = 0.1, label = expression("SGD did not effect pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = 1.5, label = expression("SGD decreased pCO"[2]), size = 3, color = "blue")+
+  # annotate(geom = "text", x = 2.7, y = -1.5, label = expression("SGD increased pCO"[2]), size = 3, color = "blue")+
+  
+  theme_bw()+
+  theme(legend.position = "null",
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
