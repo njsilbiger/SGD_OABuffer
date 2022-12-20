@@ -16,6 +16,7 @@ library(brms)
 library(tidybayes)
 library(bayesplot)
 library(stringr)
+library(broom)
 
 ##### Read in the data #############
 # SGDData<-read_csv(here("Data","Timeseries_edited.csv")) %>%
@@ -70,11 +71,15 @@ library(stringr)
 #### Exploratory plots#############
 
 ### The dates are messaged up so I needed to do it manually ###
-SGDData <- read_csv(here("data","SGDData_times.csv"))
+#SGDData <- read_csv(here("data","SGDData_times.csv"))
+SGDData <- read_csv(here("data","Time_Space.csv"))
+
 
 # standardize the data
 SGDData <- SGDData %>%
-  mutate_at(.vars = c("rn_bq_m3", "nox_u_m","aou_umol_l"  ,"excess_co2_umol_kg","temperature","p_h_in","advection_rate_cm_day", "water_level_m"), .funs = list(std = ~scale(.)))
+ # mutate_at(.vars = c("rn_bq_m3", "nox_u_m", "salinity"), .funs = list(log = ~log(.))) %>%
+  mutate_at(.vars = c("rn_bq_m3", "nox_u_m","aou_umol_l"  ,"excess_co2_umol_kg","temperature","p_h_in","advection_rate_cm_day", "water_level_m", "p_co_in_uatm", "salinity"), .funs = list(std = ~scale(.)))
+  #rename( "rn_bq_m3_std" ="rn_bq_m3_log_std" ,"nox_u_m_std" ="nox_u_m_log_std", "Salinty_std"="salinity_log_std")
 
 
 ### site level sums ####
@@ -95,7 +100,7 @@ P_no_onetree<-SGD_sum %>%
   geom_point(size = 2)+
   geom_smooth(method = "lm", se = FALSE, color = "black") +
   geom_label_repel(aes(label = site))+
-  geom_hline(yintercept = 0, color = "grey", linetype = 2)+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2) +
   labs(x = expression(paste("Cumulative DIN ",mu, "mol L"^-1 )),
        y = expression(paste("Cumulative Excess CO"[2]," ", mu, "mol kg"^-1 )))+
   theme_bw()
@@ -171,13 +176,14 @@ SGD_mean %>%
 # SGD ~ depth
 SGDmod<-bf(rn_bq_m3_std~water_level_m_std)
 # N ~ SGD*DayNight
-Nmod<-bf(nox_u_m_std~DayNight*rn_bq_m3_std)
+#Nmod<-bf(nox_u_m_std~DayNight*rn_bq_m3_std)
+Nmod<-bf(nox_u_m_std~rn_bq_m3_std)
 # Temperature ~ SGD*DayNight
 Tempmod<-bf(temperature_std ~ DayNight*rn_bq_m3_std)
 # pH ~ DayNight*(AOU + SGD)
 #pHmod<-bf(p_h_in_std~DayNight*(aou_umol_l_std+rn_bq_m3_std))
 pHmod<-bf(p_h_in_std~aou_umol_l_std+rn_bq_m3_std)
-pCO2mod<-bf(p_co_in_uatm~aou_umol_l_std+rn_bq_m3_std)
+pCO2mod<-bf(p_co_in_uatm_std~aou_umol_l_std+rn_bq_m3_std)
 
 # AOU ~ DayNight*(N+Temperature)
 #AOUmod<-bf(aou_umol_l_std~DayNight*(temperature_std+nox_u_m_std))
@@ -192,7 +198,7 @@ CO2mod<-bf(excess_co2_umol_kg_std ~rn_bq_m3_std+aou_umol_l_std)
 ## Later
 # Delta TA ~ pH + temp
 
-site <-unique(SGDData$site)
+site <-unique(SGDData$site)[1]
 
 # Function to run Bayesian SEM and make the posterior predictive checks and plot marginal effects
 RunSEM<-function(site){
@@ -237,7 +243,7 @@ p5<-pp_check(fit_brms, resp="aouumollstd") +
   p2+p3+p4+p5+
     #p6+
     plot_layout(guides = "collect") +
-  plot_annotation(title = 'Heron Island Posterior Predictive Checks', tag_levels = "A")+
+  plot_annotation(title = 'Heron Island Posterior Predictive Checks', tag_levels = "A")
   ggsave(here("Output",paste(site,"Posteriorchecks.pdf")), width = 5, height = 5)
 
 # plot the results
@@ -352,9 +358,9 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
   # pCO2 ~ DayNight*(AOU + SGD)
   R<-conditional_effects(fit_brms, "rn_bq_m3_std", resp = "pcoinuatmstd", method = "predict", resolution = 1000)
   R4<-R$pcoinuatmstd.pcoinuatmstd_rn_bq_m3_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
-           lower = lower__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
-           upper = upper__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center")) %>%
+    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center"),
+           lower = lower__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center"),
+           upper = upper__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center")) %>%
     mutate(radon = rn_bq_m3_std*attr (SGDData$rn_bq_m3_std,"scaled:scale")+attr(SGDData$rn_bq_m3_std,"scaled:center")
     )%>%
     ggplot()+ # back trasform the log transformed data for better visual
@@ -412,9 +418,9 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
 
   R<-conditional_effects(fit_brms, "aou_umol_l_std", resp = "pcoinuatmstd", method = "predict", resolution = 1000)
   R4b<-R$pcoinuatmstd.pcoinuatmstd_aou_umol_l_std %>% # back transform the scaled effects for the plot
-    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
-           lower = lower__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center"),
-           upper = upper__*attr(SGDData$p_co_in_uatm,"scaled:scale")+attr(SGDData$p_co_in_uatm,"scaled:center")) %>%
+    mutate(estimate = estimate__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center"),
+           lower = lower__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center"),
+           upper = upper__*attr(SGDData$p_co_in_uatm_std,"scaled:scale")+attr(SGDData$p_co_in_uatm_std,"scaled:center")) %>%
     mutate(aou = aou_umol_l_std*attr (SGDData$aou_umol_l_std,"scaled:scale")+attr(SGDData$aou_umol_l_std,"scaled:center")
     )%>%
     ggplot()+ # back trasform the log transformed data for better visual
@@ -575,7 +581,7 @@ R<-conditional_effects(fit_brms, "rn_bq_m3_std:DayNight", resp = "temperaturestd
   #   theme(plot.title = element_text(hjust = 0.5, size = 14), legend.position = 'bottom')
   
   ## bring them all together in patchwork
-  R<-(R2|R3)/(R4|R4b)/(R5|R5b)
+  R<-(R2|R3)/(R4|R4b)/(R5|R5b)+
   #/(R6|R6b)+
     plot_layout(guides = "collect")+
     plot_annotation(tag_levels = "A")&
@@ -614,8 +620,12 @@ Cof<-post %>%
   mutate(sig = ifelse(sign(.lower)==sign(.upper),'yes','no'))%>%# if not significant make it grey
   separate(col = key,into = c("b", "dependent", "independent"),sep = "_")%>% #loose the b and bring the values back together
   # mutate(key = paste(dependent, independent))%>%
-  mutate(dependent = factor(dependent, levels = c("aouumollstd","excessco2umolkgstd","noxumstd","phinstd","temperaturestd")))%>%
-  mutate(dependent  = recode(dependent, aouumollstd = "AOU", excessco2umolkgstd = "Excess CO2", noxumstd = "NOx", phinstd = "pH", temperaturestd  ="Temperature"), Site = site)
+  mutate(dependent = factor(dependent, levels = c("aouumollstd","pcoinuatmstd","noxumstd","temperaturestd")))%>%
+  mutate(dependent  = recode(dependent, aouumollstd = "AOU",
+                             pcoinuatmstd = "pCO2", 
+                             noxumstd = "NOx", 
+                           #  phinstd = "pH", 
+                             temperaturestd  ="Temperature"), Site = site)
 
 return(Cof)
 }
@@ -661,7 +671,7 @@ CoefPlot<-AllCoefs%>%
         strip.background = element_blank(),
         strip.text = element_text(size = 14, face = "bold")
   )+
-  facet_grid(~dependent, scales = "free_y", space='free')+
+  facet_grid(~dependent, scales = "free_y", space='free')
   ggplot2::ggsave("Output/coefficientsAll.pdf", width = 10, height = 5, useDingbats = FALSE)
 
 
@@ -701,5 +711,130 @@ OTIplot<-IndivPlots(site = "One Tree")
 LHIplot<-IndivPlots(site = "Lord Howe Island")
 NPplot<-IndivPlots(site = "Nusa Penida")
 
-HIplot/CIplot/LIplot/OTIplot/LHIplot/NPplot+
+HIplot/CIplot/LIplot/OTIplot/LHIplot/NPplot
   ggsave("Output/CoefIndiv.pdf", width = 8, height = 20)
+  
+  ### try some residual plots
+  ## plot the relationship between temp and aou, then take residuals of model to see if nutrients explain added variance
+  
+  SGDData_transect<-SGDData %>%
+    filter(Time_Space == "Transect") %>%
+    drop_na(salinity)
+  
+  SGDData_ts<-SGDData %>%
+    filter(Time_Space == "Time Series") %>%
+    drop_na(salinity)
+  
+  mod<-lm(aou_umol_l~temperature, data = SGDData_transect %>% filter(site == "Nusa Penida"))
+  dat<-augment(mod, SGDData_transect%>% filter(site == "Nusa Penida"))
+
+  dat %>%ggplot(aes(x = log(nox_u_m), y = .resid, color = DayNight))+
+    geom_point()+
+    geom_smooth(method = "lm")
+  
+  
+ N_sum<- SGDData_ts %>% 
+    group_by(site)%>%
+    summarise(maxN = max(nox_u_m, na.rm = TRUE),
+              meanN = mean(nox_u_m, na.rm = TRUE),
+              covN = var(nox_u_m, na.rm = TRUE)/mean(nox_u_m, na.rm = TRUE))
+    
+dat2<-  SGDData_ts %>% 
+    group_by(site) %>% 
+    nest() %>% 
+    mutate(model = map(data, ~lm(p_co_in_uatm_std ~ aou_umol_l_std, data = .x) %>% 
+                         tidy)) %>% 
+    unnest(model) %>%
+    filter(term == 'aou_umol_l_std') %>%
+    select(site, estimate) %>%
+    left_join(N_sum) 
+
+
+ggplot(dat2, aes(x = maxN, y = estimate))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2) +
+  labs(y = "Effect of productivity on pCo2",
+       x = "Max NOx")+
+  theme_bw()
+
+
+anova(lm(estimate~maxN, data = dat2))
+
+
+dat3<-  SGDData_ts %>% 
+  group_by(site) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ salinity_std, data = .x) %>% 
+                       tidy)) %>% 
+  unnest(model) %>%
+  filter(term == 'salinity_std') %>%
+  select(site, estimate) %>%
+  left_join(N_sum) 
+
+ggplot(dat3, aes(x = maxN, y = estimate))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2) +
+  labs(y = "Effect of salinity on pCo2",
+       x = "Max NOx")+
+  theme_bw()
+
+
+
+
+
+### transect
+N_sum<- SGDData_transect %>% 
+  group_by(site)%>%
+  summarise(maxN = max(nox_u_m, na.rm = TRUE),
+            meanN = mean(nox_u_m, na.rm = TRUE),
+            covN = var(nox_u_m, na.rm = TRUE)/mean(nox_u_m, na.rm = TRUE))
+
+dat2<-  SGDData_transect %>% 
+  group_by(site) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ aou_umol_l_std, data = .x) %>% 
+                       tidy)) %>% 
+  unnest(model) %>%
+  filter(term == 'aou_umol_l_std') %>%
+  select(site, estimate) %>%
+  left_join(N_sum) 
+
+
+ggplot(dat2, aes(x = maxN, y = estimate))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2) +
+  labs(y = "Effect of productivity on pCo2",
+       x = "Max NOx")+
+  theme_bw()
+
+
+anova(lm(estimate~maxN, data = dat2))
+
+
+
+dat3<-  SGDData_transect %>% 
+  group_by(site) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~lm(p_co_in_uatm_std ~ salinity_std, data = .x) %>% 
+                       tidy)) %>% 
+  unnest(model) %>%
+  filter(term == 'salinity_std') %>%
+  select(site, estimate) %>%
+  left_join(N_sum) 
+
+ggplot(dat3, aes(x = maxN, y = estimate))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, color = "black")+
+  geom_label_repel(aes(label = site))+
+  geom_hline(yintercept = 0, color = "grey", linetype = 2) +
+  labs(y = "Effect of salinity on pCo2",
+       x = "Max NOx")+
+  theme_bw()
+
+      
