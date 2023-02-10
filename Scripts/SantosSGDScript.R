@@ -751,15 +751,21 @@ dat2<-  SGDData_ts %>%
     mutate(sig = ifelse(p.value <= 0.05, "yes","no")) %>%
     left_join(N_sum) 
 
+# add colors to dat2
+
+colors <-c("#F3F186","#FFDA99","#74849C","#FC987B","#A2D181","#74849C")
+dat2<-dat2 %>%
+  mutate(site = ifelse(site == "Cook Islands","Rarotonga",site)
+         ) 
+
 p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
-  geom_point(size = 3, aes(color = sig))+
+  geom_point(size = 3, aes(alpha = sig, color = site))+
   geom_errorbar(aes(ymin = estimate_aou-std.error_aou, ymax = estimate_aou+std.error_aou), width = 0.1)+
   geom_smooth(method = "lm", formula = y~poly(x,2),se = FALSE, color = "black")+
   geom_label_repel(aes(label = site),nudge_x = 0.1)+
-  # annotate(geom = "text", x = 2.7, y = 0.01, label = expression("net productivity did not effect pCO"[2]), size = 3, color = "blue")+
-  # annotate(geom = "text", x = 2.7, y =- 0.2, label = expression("net productivity decreased pCO"[2]), size = 3, color = "blue")+
-  # annotate(geom = "text", x = 2.7, y = 0.2, label = expression("net productivity increased pCO"[2]), size = 3, color = "blue")+
-  scale_color_manual(values = c("grey","black"))+
+#  scale_color_manual(values = c("grey","black"))+
+  scale_alpha_discrete(range = c(0.5,1))+
+  scale_color_manual(values = colors)+
   geom_hline(yintercept = 0, color = "grey", linetype = 2) +
   labs(y = expression("Standardized effect of productivity on pH"),
        x = expression(paste("Max Nitrate + Nitrite", " (",mu, "mol L"^-1,")"))
@@ -772,6 +778,7 @@ p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
 
 anova(lm(estimate_aou~maxN, data = dat2))
 
+ggsave(plot = p1, filename =here("Output","MaxN_pH.png"), width = 6, height = 6 )
 
 dat3<-  SGDData_ts %>% 
   #drop_na(co_sst_std) %>%
