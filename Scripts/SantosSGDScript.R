@@ -759,7 +759,7 @@ dat2<-dat2 %>%
          ) 
 
 p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
-  geom_point(size = 3, aes(alpha = sig, color = site))+
+  geom_point(size = 4, aes(alpha = sig, color = site))+
   geom_errorbar(aes(ymin = estimate_aou-std.error_aou, ymax = estimate_aou+std.error_aou), width = 0.1)+
   geom_smooth(method = "lm", formula = y~poly(x,2),se = FALSE, color = "black")+
   geom_label_repel(aes(label = site),nudge_x = 0.1)+
@@ -773,12 +773,13 @@ p1<-ggplot(dat2, aes(x = maxN, y = estimate_aou))+
   theme_bw()+
   theme(legend.position = "null",
         axis.title = element_text(size = 16),
-        axis.text = element_text(size = 14))
+        axis.text = element_text(size = 14),
+        panel.grid = element_blank())
 
 
 anova(lm(estimate_aou~maxN, data = dat2))
 
-ggsave(plot = p1, filename =here("Output","MaxN_pH.png"), width = 6, height = 6 )
+ggsave(plot = p1, filename =here("Output","MaxN_pH.png"), width = 5, height = 5 )
 
 dat3<-  SGDData_ts %>% 
   #drop_na(co_sst_std) %>%
@@ -818,18 +819,25 @@ p1+p2+plot_annotation(tag_levels = "A")&theme(panel.grid = element_line(color = 
 
 ggsave(here("Output","maxN_effects.pdf"), width = 12, height = 5)
 
+SGDData_ts <-SGDData_ts %>%
+  mutate(site = ifelse(site == "Cook Islands","Rarotonga",site)
+  ) 
 p_aou<-SGDData_ts %>%
   ggplot(aes(x = aou_umol_l, y = p_h_in))+
-  geom_point()+
-  geom_smooth(method = "lm",data = subset(SGDData_ts, site %in% c("Lord Howe Island","Heron Island","Nusa Penida","Cook Islands")))+
-  facet_wrap(~site, scales = "free", ncol = 1)+
+  geom_point(aes(color = site))+
+  geom_smooth(method = "lm",data = subset(SGDData_ts, site %in% c("Lord Howe Island","Heron Island","Nusa Penida","Rarotonga")), color = "black")+
+  facet_wrap(~site, scales = "free")+
   theme_bw()+
   labs(x = expression(atop("Biological Productivity", paste("AOU (",mu, "mol L"^-1,")"))),
        y = "pH")+
+  scale_color_manual(values = colors)+
   theme(legend.position = "null",
         axis.title = element_text(size = 16),
-        axis.text = element_text(size = 14))
-ggsave(here("Output","AOU_pH.pdf"), width = 8, height = 6)
+        axis.text = element_text(size = 14),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 14, face = "bold"),
+        panel.grid = element_blank())
+ggsave(here("Output","AOU_pH.png"), width = 8, height = 6)
 
 p_radon<-SGDData_ts %>%
   ggplot(aes(x = rn_bq_m3, y = p_h_in))+
